@@ -7,40 +7,94 @@ from dataclasses import dataclass, field
 from typing import Dict, Optional
 
 
+ACK_OK = "0\r"
+ACK_ERROR = "1\r"
+DEFAULT_IDENTITY = "FLUKE 187,V1.00,SIM000001"
+DEFAULT_PRIMARY_READING = "+12.34 VDC"
+VALID_KEY_CODES = {
+    "10",
+    "11",
+    "12",
+    "13",
+    "14",
+    "15",
+    "16",
+    "17",
+    "18",
+    "19",
+    "20",
+    "21",
+    "22",
+    "23",
+    "27",
+    "28",
+    "29",
+    "30",
+}
+
+
 @dataclass
 class Fluke187Simulator:
-    """Line-based command simulator for a Fluke 187 style device."""
+    """Fluke 187 remote interface simulator."""
 
-    measurements: Dict[str, str] = field(
+    identity: str = DEFAULT_IDENTITY
+    default_primary_reading: str = DEFAULT_PRIMARY_READING
+    function_readings: Dict[str, str] = field(
         default_factory=lambda: {
-            "MEAS:VOLT?": "12.34",
-            "MEAS:OHM?": "1000.0",
-            "MEAS:CURR?": "0.123",
+            "16": "+60.00 Hz",
+            "17": "+12.34 VDC",
+            "18": "+12.34 VDC",
+            "29": "+12.34 VDC",
+            "30": "+12.34 VDC",
         }
     )
-    idn: str = "FLUKE,187,SIM,1.0"
+    primary_reading: str = field(init=False)
 
-    def process_command(self, command: str) -> str:
+    def __post_init__(self) -> None:
+        self.primary_reading = self.default_primary_reading
+
+    def reset(self) -> None:
+        self.primary_reading = self.default_primary_reading
+
+    def execute_command(self, command: str) -> str:
         normalized = command.strip().upper()
         if not normalized:
-            return ""
-        if normalized in {"*IDN?", "ID?"}:
-            return self.idn
-        if normalized == "SYST:ERR?":
-            return "0,No error"
-        if normalized in self.measurements:
-            return self.measurements[normalized]
-        return "ERR:UNKNOWN COMMAND"
+            return ACK_ERROR
+
+        if normalized == "DS":
+            self.reset()
+            return ACK_OK
+
+        if normalized == "ID":
+            return f"{ACK_OK}{self.identity}\r"
+
+        if normalized == "RI":
+            self.reset()
+            return ACK_OK
+
+        if normalized == "QM":
+            return f"{ACK_OK}QM,{self.primary_reading}\r"
+
+        if normalized.startswith("SF "):
+            key_code = normalized[3:]
+            if key_code not in VALID_KEY_CODES:
+                return ACK_ERROR
+            self.primary_reading = self.function_readings.get(key_code, self.primary_reading)
+            return ACK_OK
+
+        return ACK_ERROR
 
     def serve_once(self, serial_conn) -> Optional[str]:
-        raw = serial_conn.readline()
+        raw = serial_conn.read_until(b"\r")
         if not raw:
             return None
 
-        command = raw.decode("ascii", errors="ignore")
-        response = self.process_command(command)
-        if response:
-            serial_conn.write((response + "\r\n").encode("ascii"))
+        command = raw.decode("ascii", errors="ignore").strip("\r\n")
+        if not command:
+            return None
+
+        response = self.execute_command(command)
+        serial_conn.write(response.encode("ascii"))
         return response
 
 
@@ -53,7 +107,7 @@ def run_serial_simulator(port: str, baudrate: int = 9600, timeout: float = 1.0) 
         ) from exc
 
     simulator = Fluke187Simulator()
-    with serial.Serial(port=port, baudrate=baudrate, timeout=timeout) as conn:
+    with serial.Serial(port=port, baudrate=baudrate, bytesize=8, parity="N", stopbits=1, timeout=timeout) as conn:
         while True:
             simulator.serve_once(conn)
 
