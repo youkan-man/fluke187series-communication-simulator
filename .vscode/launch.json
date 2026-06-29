@@ -1,0 +1,22 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Fluke187 Simulator",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/fluke187_simulator.py",
+      "console": "integratedTerminal",
+      "args": [
+        "--port",
+        "/dev/ttyS103",
+        "--reading-mode",
+        "random",
+        "--random-profile",
+        "voltage_dc",
+        "--seed",
+        "123"
+      ]
+    }
+  ]
+}
