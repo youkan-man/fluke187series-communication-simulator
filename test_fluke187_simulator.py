@@ -240,5 +240,53 @@ class Fluke187SimulatorTests(unittest.TestCase):
         )
 
 
+class Fluke187WebTests(unittest.TestCase):
+    def test_parse_config_builds_serial_service_config(self):
+        from fluke187_web import parse_config
+
+        config = parse_config(
+            {
+                "port": " COM3 ",
+                "baudrate": "19200",
+                "timeout": "0.5",
+                "reading_mode": "random",
+                "random_profile_name": "hz",
+                "seed": "42",
+            }
+        )
+
+        self.assertEqual(config.port, "COM3")
+        self.assertEqual(config.baudrate, 19200)
+        self.assertEqual(config.timeout, 0.5)
+        self.assertEqual(config.reading_mode, ReadingMode.RANDOM)
+        self.assertEqual(config.random_profile_name, "hz")
+        self.assertEqual(config.seed, 42)
+
+    def test_available_ports_excludes_records_until_deleted(self):
+        import fluke187_web
+        from fluke187_web import SerialServiceConfig, SerialServiceManager
+
+        manager = SerialServiceManager()
+        original = fluke187_web.list_serial_ports
+        fluke187_web.list_serial_ports = lambda: ["COM1", "COM2"]
+        try:
+            from fluke187_web import SerialServiceRecord
+
+            record = SerialServiceRecord(
+                id=1,
+                config=SerialServiceConfig(port="COM1"),
+                status="stopped",
+            )
+            manager._records[record.id] = record
+
+            self.assertEqual(manager.available_ports(), ["COM2"])
+
+            manager.delete_service(record.id)
+
+            self.assertEqual(manager.available_ports(), ["COM1", "COM2"])
+        finally:
+            fluke187_web.list_serial_ports = original
+
+
 if __name__ == "__main__":
     unittest.main()
