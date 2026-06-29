@@ -19,7 +19,7 @@ DEFAULT_PRIMARY_READING = "+12.34 V DC"
 
 VALID_KEY_CODES = {
     "10", "11", "12", "13", "14", "15", "16", "17", "18", "19",
-    "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30",
+    "20", "21", "22", "23", "27", "28", "29", "30",
 }
 
 
@@ -140,6 +140,7 @@ class Fluke187Simulator:
             return
 
         profile_name = self.key_profile_map.get(key_code, self.random_profile_name)
+        self.random_profile_name = profile_name
         self.primary_reading = self.generate_random_reading(profile_name)
 
     def generate_random_reading(self, profile_name: Optional[str] = None) -> str:
